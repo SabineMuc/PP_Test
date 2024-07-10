@@ -1,0 +1,70 @@
+# This is a basic workflow to help you get started with Actions
+
+name: Create_Solution
+
+# Controls when the workflow will run
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      publisher-name: 
+        required: true
+      publisher-prefix: 
+          required: true
+      solution-name: 
+          required: true
+      environment: 
+          required: false         
+    
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+
+      # install pac
+      - name: install pac
+        run: |
+          dotnet tool install --global Microsoft.PowerApps.CLI.Tool      
+      # create solution
+      - name: Add msbuild to PATH
+        uses: microsoft/setup-msbuild@v2
+        
+      # create solution
+      - name: create solution
+        run: |       
+          pac auth create --applicationId ${{ secrets.APP_ID }} --clientSecret '${{ secrets.CLIENT_SECRET }}' -t '${{ secrets.TENANT_ID }}' --environment '${{ secrets.ENV }}'
+          pac solution init --publisher-name '${{ github.event.inputs.publisher-name }}' --publisher-prefix  '${{ github.event.inputs.publisher-prefix }}' --outputDirectory '${{ github.event.inputs.solution-name }}'
+
+      # create
+      - name: generate import file
+        run: |
+          msbuild ${{ github.event.inputs.solution-name }} /t:build /restore
+      
+      # deploy solution
+      - name: deploy solution
+        run: |
+          $filePath = "./${{ github.event.inputs.solution-name }}/bin/Debug/${{ github.event.inputs.solution-name }}.zip"
+          Write-Output $filePath
+          if (Test-Path $filePath) {
+            Write-Output "File exists"
+          } else {
+            Write-Output "File does not exist"          
+          }
+          pac solution import --path $filePath
+
+      # commit solution
+      - name: commit solution
+        run: |
+          dir
+          git config --global user.email "Sabine.Franz@capgemini.com"
+          git config --global user.name "Sabine"
+          git pull
+          git add .
+          git commit -m "generate solution"
+          git push origin main
+          
+      
+      
